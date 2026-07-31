@@ -1,16 +1,13 @@
 import sqlite3
 
-
 def normalize(name):
     return name.replace(" ", "").lower()
-
 
 def load_inventory(db_path="inventory.db"):
     conn = sqlite3.connect(db_path)
     rows = conn.execute("SELECT item, stock FROM inventory").fetchall()
     conn.close()
     return {normalize(item): (item, stock) for item, stock in rows}
-
 
 def validate_invoice(invoice, db_path="inventory.db"):
     inventory = load_inventory(db_path)
