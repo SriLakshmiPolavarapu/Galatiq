@@ -37,6 +37,12 @@ Step-by-step instructions:
   If subtotal or tax is None, skip this call and note that the math check was skipped.
 - Only after all tool calls above are complete, give your Final Answer.
 
+CRITICAL RULE: You must NEVER state that an item's stock is sufficient, insufficient, found, or not found
+unless you actually called check_inventory for that exact item and are reporting its real returned output.
+Making up or guessing a tool's result instead of calling it is a serious error. If you are about to write
+"Inventory check: OK" or similar for an item you have not called check_inventory on, stop and call the tool
+first. There are {num_items} required check_inventory calls in this task, count them before answering.
+
 Your Final Answer must summarize every item's status and the math check result, then give an overall PASS or FAIL verdict with reasons.""",
         expected_output="A summary listing each item's status and the total math check result, followed by an overall PASS or FAIL verdict with reasons.",
         agent=validator,
@@ -51,7 +57,7 @@ def run_validation(invoice):
     return str(result)
 
 
-def build_approval_crew(invoice, validation_summary):
+def build_approval_crew(invoice, validation_summary, ground_truth):
     approver = Agent(
         role="VP Approval Agent",
         goal="Decide whether to approve or reject invoices based on validation results and business rules",
@@ -70,11 +76,21 @@ def build_approval_crew(invoice, validation_summary):
         verbose=True,
     )
 
+    ground_truth_text = "PASSED (no issues found)." if ground_truth["passed"] else "FAILED with these issues:\n" + "\n".join(
+        f"- {f['item'] or 'invoice'}: {f['issue']} — {f['detail']}" for f in ground_truth["flags"]
+    )
+
     decide_task = Task(
         description=f"""Decide whether to approve or reject this invoice.
 
 Invoice: {invoice}
-Validation summary: {validation_summary}
+
+GROUND TRUTH VALIDATION (computed directly by the system, guaranteed accurate): {ground_truth_text}
+
+Validation agent's narrative summary (for context only, may occasionally be incomplete): {validation_summary}
+
+IMPORTANT: The GROUND TRUTH VALIDATION above is authoritative. If it conflicts with the narrative summary,
+trust the GROUND TRUTH. Base your decision primarily on the GROUND TRUTH result.
 
 Invoices over $10,000 require extra scrutiny. Any unresolved validation issue
 (unknown item, insufficient stock, invalid quantity, total mismatch) is a strong
@@ -86,9 +102,9 @@ State your decision (APPROVED or REJECTED) and your reasoning.""",
     )
 
     critique_task = Task(
-        description="""Review the approval decision above. Check specifically:
-- Does the validation summary actually support this decision?
-- Was every issue in the validation summary accounted for?
+        description=f"""Review the approval decision above. Check specifically:
+- Does the GROUND TRUTH VALIDATION ({ground_truth_text}) actually support this decision?
+- Was every issue in the ground truth accounted for?
 - Is there anything the approver missed?
 
 If the decision holds up, confirm it. If not, overturn it and explain why.
@@ -101,7 +117,7 @@ State your FINAL decision (APPROVED or REJECTED) and reasoning.""",
     return Crew(agents=[approver, critic], tasks=[decide_task, critique_task], verbose=True)
 
 
-def run_approval(invoice, validation_summary):
-    crew = build_approval_crew(invoice, validation_summary)
+def run_approval(invoice, validation_summary, ground_truth):
+    crew = build_approval_crew(invoice, validation_summary, ground_truth)
     result = crew.kickoff()
     return str(result)
