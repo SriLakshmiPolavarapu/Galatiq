@@ -3,6 +3,7 @@ import tempfile
 import os
 from ingestion import ingest_invoice
 from agents import run_validation, run_approval
+from validation import validate_invoice
 from payment import process_payment
 from main import parse_decision
 
@@ -18,7 +19,6 @@ uploaded_file = st.file_uploader(
 
 if uploaded_file is not None:
     if st.button("Process Invoice", type="primary"):
-        # Save the uploaded file to a temp path so our existing file-based functions work unchanged
         suffix = os.path.splitext(uploaded_file.name)[1]
         with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
             tmp.write(uploaded_file.getvalue())
@@ -35,7 +35,8 @@ if uploaded_file is not None:
                 st.write(validation_summary)
 
                 st.write("**Step 3/4 — Approval Agent (with critic review)**")
-                approval_text = run_approval(invoice, validation_summary)
+                ground_truth = validate_invoice(invoice)
+                approval_text = run_approval(invoice, validation_summary, ground_truth)
                 approval = parse_decision(approval_text)
 
                 st.write("**Step 4/4 — Payment**")
@@ -43,11 +44,10 @@ if uploaded_file is not None:
 
                 status.update(label="Processing complete", state="complete")
 
-            # Final result, front and center
             if approval["decision"] == "approved":
-                st.success(f"✅ APPROVED — Payment of ${invoice['total']:,.2f} sent to {invoice['vendor']}" if invoice['total'] else "✅ APPROVED")
+                st.success(f"APPROVED — Payment of ${invoice['total']:,.2f} sent to {invoice['vendor']}" if invoice['total'] else "✅ APPROVED")
             else:
-                st.error("❌ REJECTED — No payment sent")
+                st.error("REJECTED — No payment sent")
 
             with st.expander("Full approval reasoning"):
                 st.write(approval["reasoning"])
