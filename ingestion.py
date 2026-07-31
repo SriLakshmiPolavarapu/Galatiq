@@ -85,6 +85,18 @@ def parse_json(filepath):
 
 
 def parse_csv(filepath):
+    """Tries the known field/value CSV layout first (cheap, no LLM). If the CSV uses a
+    different layout (e.g. a wide table with one row per item), falls back to LLM
+    extraction on the raw text, same approach as txt/pdf/xml."""
+    try:
+        return parse_csv_field_value(filepath)
+    except (KeyError, ValueError):
+        with open(filepath, "r") as f:
+            raw_text = f.read()
+        return extract_via_llm(raw_text)
+
+
+def parse_csv_field_value(filepath):
     fields = {}
     items = []
     current_item = {}
