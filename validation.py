@@ -1,13 +1,9 @@
 import sqlite3
 
-
 def normalize(name):
-    """Strip spaces and lowercase, so 'Widget A' and 'WidgetA' match."""
     return name.replace(" ", "").lower()
 
-
 def load_inventory(db_path="inventory.db"):
-    """Returns {normalized_name: (original_name, stock)} for every item in the DB."""
     conn = sqlite3.connect(db_path)
     rows = conn.execute("SELECT item, stock FROM inventory").fetchall()
     conn.close()
@@ -15,7 +11,6 @@ def load_inventory(db_path="inventory.db"):
 
 
 def validate_invoice(invoice, db_path="inventory.db"):
-    """Checks each line item against inventory. Returns a list of flags, plus a pass/fail summary."""
     inventory = load_inventory(db_path)
     flags = []
 
@@ -45,7 +40,7 @@ def validate_invoice(invoice, db_path="inventory.db"):
     total = invoice.get("total")
     if subtotal is not None and tax is not None and total is not None:
         expected_total = subtotal + tax
-        if abs(expected_total - total) > 1.00:  # allow $1 tolerance for rounding
+        if abs(expected_total - total) > 1.00:  
             flags.append({
                 "item": None,
                 "issue": "total_mismatch",
