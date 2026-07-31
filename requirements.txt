@@ -1,3 +1,6 @@
 crewai
 pdfplumber
 openai
+python-dotenv
+streamlit
+litellm
