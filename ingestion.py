@@ -17,6 +17,15 @@ from the raw invoice text below, even if it contains typos, OCR errors, or incon
 formatting (e.g. "2O26" means "2026", "Payble" means "Payable", missing spaces in item
 names should be corrected if obvious).
 
+Pay close attention to these three amount fields, they often appear under different labels:
+- "subtotal": the pre-tax total, may be labeled "Subtotal", "Amt", or similar
+- "tax": the tax amount, may be labeled "Tax", "Tax (X%)", or similar. If truly no tax is
+  mentioned anywhere, use 0, not null.
+- "total": the final amount due, may be labeled "Total", "Grand Total", "Total Amount",
+  "Amount Due", or similar
+If subtotal or tax genuinely do not appear anywhere in the text, use null for that field only.
+Do not skip a field just because it appears in a table or near other numbers, scan the full text.
+
 Return ONLY valid JSON in exactly this shape, no other text:
 {{
   "invoice_number": string or null,
@@ -24,6 +33,8 @@ Return ONLY valid JSON in exactly this shape, no other text:
   "date": string or null,
   "due_date": string or null,
   "items": [{{"item": string, "qty": number, "unit_price": number}}],
+  "subtotal": number or null,
+  "tax": number or null,
   "total": number or null,
   "payment_terms": string or null
 }}
@@ -67,6 +78,8 @@ def parse_json(filepath):
             for li in data.get("line_items", [])
         ],
         "total": data.get("total"),
+        "subtotal": data.get("subtotal"),
+        "tax": data.get("tax_amount"),
         "payment_terms": data.get("payment_terms"),
     }
 
@@ -102,6 +115,8 @@ def parse_csv(filepath):
         "due_date": fields.get("due_date"),
         "items": items,
         "total": float(fields["total"]) if "total" in fields else None,
+        "subtotal": float(fields["subtotal"]) if "subtotal" in fields else None,
+        "tax": float(fields["tax"]) if "tax" in fields else None,
         "payment_terms": fields.get("payment_terms"),
     }
 
