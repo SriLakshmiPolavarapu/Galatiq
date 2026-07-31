@@ -3,7 +3,7 @@ import json
 import csv
 import pdfplumber
 from dotenv import load_dotenv
-from openai import OpenAI  # xAI's API is OpenAI-compatible
+from openai import OpenAI  
 
 load_dotenv()
 
@@ -45,9 +45,7 @@ Invoice text:
 ---
 """
 
-
 def ingest_invoice(filepath):
-    """Reads any invoice file and returns the common schema dict."""
     ext = os.path.splitext(filepath)[1].lower()
 
     if ext == ".txt":
@@ -62,7 +60,6 @@ def ingest_invoice(filepath):
         return parse_xml(filepath)
     else:
         raise ValueError(f"Unsupported file type: {ext}")
-
 
 def parse_json(filepath):
     with open(filepath, "r") as f:
@@ -83,7 +80,6 @@ def parse_json(filepath):
         "payment_terms": data.get("payment_terms"),
     }
 
-
 def parse_csv(filepath):
     """Tries the known field/value CSV layout first (cheap, no LLM). If the CSV uses a
     different layout (e.g. a wide table with one row per item), falls back to LLM
@@ -94,7 +90,6 @@ def parse_csv(filepath):
         with open(filepath, "r") as f:
             raw_text = f.read()
         return extract_via_llm(raw_text)
-
 
 def parse_csv_field_value(filepath):
     fields = {}
@@ -132,7 +127,6 @@ def parse_csv_field_value(filepath):
         "payment_terms": fields.get("payment_terms"),
     }
 
-
 def extract_via_llm(raw_text):
     """Shared LLM extraction used by any format too unstructured for direct parsing (txt, pdf, xml)."""
     response = client.chat.completions.create(
@@ -144,24 +138,19 @@ def extract_via_llm(raw_text):
     data["raw_text"] = raw_text
     return data
 
-
 def parse_txt(filepath):
     with open(filepath, "r") as f:
         raw_text = f.read()
     return extract_via_llm(raw_text)
 
-
 def extract_pdf_text(filepath):
-    """Mechanical step: pull raw text out of the PDF. No AI here."""
     with pdfplumber.open(filepath) as pdf:
         text = "\n".join(page.extract_text() or "" for page in pdf.pages)
     return text
 
-
 def parse_pdf(filepath):
     raw_text = extract_pdf_text(filepath)
     return extract_via_llm(raw_text)
-
 
 def parse_xml(filepath):
     with open(filepath, "r") as f:
