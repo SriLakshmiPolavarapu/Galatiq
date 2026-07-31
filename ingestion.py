@@ -1,10 +1,9 @@
 import os
 import json
 import csv
-import re
 import pdfplumber
 from dotenv import load_dotenv
-from openai import OpenAI
+from openai import OpenAI  # xAI's API is OpenAI-compatible
 
 load_dotenv()
 
@@ -37,6 +36,7 @@ Invoice text:
 
 
 def ingest_invoice(filepath):
+    """Reads any invoice file and returns the common schema dict."""
     ext = os.path.splitext(filepath)[1].lower()
 
     if ext == ".txt":
@@ -47,6 +47,8 @@ def ingest_invoice(filepath):
         return parse_csv(filepath)
     elif ext == ".pdf":
         return parse_pdf(filepath)
+    elif ext == ".xml":
+        return parse_xml(filepath)
     else:
         raise ValueError(f"Unsupported file type: {ext}")
 
@@ -104,47 +106,26 @@ def parse_csv(filepath):
     }
 
 
+def extract_via_llm(raw_text):
+    """Shared LLM extraction used by any format too unstructured for direct parsing (txt, pdf, xml)."""
+    response = client.chat.completions.create(
+        model="grok-4-fast",
+        messages=[{"role": "user", "content": EXTRACTION_PROMPT.format(text=raw_text)}],
+        response_format={"type": "json_object"},
+    )
+    data = json.loads(response.choices[0].message.content)
+    data["raw_text"] = raw_text
+    return data
+
+
 def parse_txt(filepath):
     with open(filepath, "r") as f:
-        lines = f.readlines()
-
-    fields = {}
-    items = []
-    item_pattern = re.compile(r"(\S+)\s+qty:\s*(\d+)\s+unit price:\s*\$?([\d,]+\.?\d*)")
-
-    for line in lines:
-        line = line.strip()
-        if not line or line == "INVOICE" or line == "Items:":
-            continue
-
-        item_match = item_pattern.match(line)
-        if item_match:
-            name, qty, price = item_match.groups()
-            items.append({
-                "item": name,
-                "qty": int(qty),
-                "unit_price": float(price.replace(",", "")),
-            })
-            continue
-
-        if ":" in line:
-            key, value = line.split(":", 1)
-            fields[key.strip()] = value.strip()
-
-    total_raw = fields.get("Total Amount", "").replace("$", "").replace(",", "")
-
-    return {
-        "invoice_number": fields.get("Invoice Number"),
-        "vendor": fields.get("Vendor"),
-        "date": fields.get("Date"),
-        "due_date": fields.get("Due Date"),
-        "items": items,
-        "total": float(total_raw) if total_raw else None,
-        "payment_terms": fields.get("Payment Terms"),
-    }
+        raw_text = f.read()
+    return extract_via_llm(raw_text)
 
 
 def extract_pdf_text(filepath):
+    """Mechanical step: pull raw text out of the PDF. No AI here."""
     with pdfplumber.open(filepath) as pdf:
         text = "\n".join(page.extract_text() or "" for page in pdf.pages)
     return text
@@ -152,13 +133,10 @@ def extract_pdf_text(filepath):
 
 def parse_pdf(filepath):
     raw_text = extract_pdf_text(filepath)
+    return extract_via_llm(raw_text)
 
-    response = client.chat.completions.create(
-        model="grok-3",
-        messages=[{"role": "user", "content": EXTRACTION_PROMPT.format(text=raw_text)}],
-        response_format={"type": "json_object"},
-    )
 
-    data = json.loads(response.choices[0].message.content)
-    data["raw_text"] = raw_text
-    return data
+def parse_xml(filepath):
+    with open(filepath, "r") as f:
+        raw_text = f.read()
+    return extract_via_llm(raw_text)
