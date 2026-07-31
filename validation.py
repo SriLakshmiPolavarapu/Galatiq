@@ -40,6 +40,18 @@ def validate_invoice(invoice, db_path="inventory.db"):
                 "detail": f"Requested {qty}, only {stock} in stock",
             })
 
+    subtotal = invoice.get("subtotal")
+    tax = invoice.get("tax")
+    total = invoice.get("total")
+    if subtotal is not None and tax is not None and total is not None:
+        expected_total = subtotal + tax
+        if abs(expected_total - total) > 1.00:  # allow $1 tolerance for rounding
+            flags.append({
+                "item": None,
+                "issue": "total_mismatch",
+                "detail": f"Subtotal (${subtotal:,.2f}) + tax (${tax:,.2f}) = ${expected_total:,.2f}, but stated total is ${total:,.2f}",
+            })
+
     return {
         "passed": len(flags) == 0,
         "flags": flags,
