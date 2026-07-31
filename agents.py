@@ -7,14 +7,11 @@ from tools import check_inventory, check_total_math
 load_dotenv()
 
 grok_llm = LLM(
-    model="xai/grok-4-fast",  # native xAI provider prefix, not "openai/"
+    model="xai/grok-4-fast",  
     api_key=os.environ.get("GROK_API_KEY", ""),
 )
 
-
 def kickoff_with_retry(crew, max_attempts=3, delay_seconds=5):
-    """Runs crew.kickoff(), retrying on transient LLM failures (e.g. empty API
-    responses) instead of crashing the whole pipeline on a one-off hiccup."""
     last_error = None
     for attempt in range(1, max_attempts + 1):
         try:
@@ -24,7 +21,6 @@ def kickoff_with_retry(crew, max_attempts=3, delay_seconds=5):
             if attempt < max_attempts:
                 time.sleep(delay_seconds)
     raise last_error
-
 
 def build_validation_crew(invoice):
     validator = Agent(
@@ -65,12 +61,10 @@ Your Final Answer must summarize every item's status and the math check result, 
 
     return Crew(agents=[validator], tasks=[task], verbose=True)
 
-
 def run_validation(invoice):
     crew = build_validation_crew(invoice)
     result = kickoff_with_retry(crew)
     return str(result)
-
 
 def build_approval_crew(invoice, validation_summary, ground_truth):
     approver = Agent(
@@ -130,7 +124,6 @@ State your FINAL decision (APPROVED or REJECTED) and reasoning.""",
     )
 
     return Crew(agents=[approver, critic], tasks=[decide_task, critique_task], verbose=True)
-
 
 def run_approval(invoice, validation_summary, ground_truth):
     crew = build_approval_crew(invoice, validation_summary, ground_truth)
