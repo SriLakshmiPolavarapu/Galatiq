@@ -2,6 +2,38 @@ import os
 import json
 import csv
 import re
+import pdfplumber
+from dotenv import load_dotenv
+from openai import OpenAI
+
+load_dotenv()
+
+client = OpenAI(
+    api_key=os.environ.get("GROK_API_KEY", ""),
+    base_url="https://api.x.ai/v1",
+)
+
+EXTRACTION_PROMPT = """You are an invoice data extraction agent. Extract structured data
+from the raw invoice text below, even if it contains typos, OCR errors, or inconsistent
+formatting (e.g. "2O26" means "2026", "Payble" means "Payable", missing spaces in item
+names should be corrected if obvious).
+
+Return ONLY valid JSON in exactly this shape, no other text:
+{{
+  "invoice_number": string or null,
+  "vendor": string or null,
+  "date": string or null,
+  "due_date": string or null,
+  "items": [{{"item": string, "qty": number, "unit_price": number}}],
+  "total": number or null,
+  "payment_terms": string or null
+}}
+
+Invoice text:
+---
+{text}
+---
+"""
 
 
 def ingest_invoice(filepath):
@@ -18,7 +50,7 @@ def ingest_invoice(filepath):
     else:
         raise ValueError(f"Unsupported file type: {ext}")
 
-# parse json
+
 def parse_json(filepath):
     with open(filepath, "r") as f:
         data = json.load(f)
@@ -35,8 +67,8 @@ def parse_json(filepath):
         "total": data.get("total"),
         "payment_terms": data.get("payment_terms"),
     }
-    
-# parse csv
+
+
 def parse_csv(filepath):
     fields = {}
     items = []
@@ -70,8 +102,8 @@ def parse_csv(filepath):
         "total": float(fields["total"]) if "total" in fields else None,
         "payment_terms": fields.get("payment_terms"),
     }
-    
-# parse txt
+
+
 def parse_txt(filepath):
     with open(filepath, "r") as f:
         lines = f.readlines()
@@ -110,3 +142,23 @@ def parse_txt(filepath):
         "total": float(total_raw) if total_raw else None,
         "payment_terms": fields.get("Payment Terms"),
     }
+
+
+def extract_pdf_text(filepath):
+    with pdfplumber.open(filepath) as pdf:
+        text = "\n".join(page.extract_text() or "" for page in pdf.pages)
+    return text
+
+
+def parse_pdf(filepath):
+    raw_text = extract_pdf_text(filepath)
+
+    response = client.chat.completions.create(
+        model="grok-3",
+        messages=[{"role": "user", "content": EXTRACTION_PROMPT.format(text=raw_text)}],
+        response_format={"type": "json_object"},
+    )
+
+    data = json.loads(response.choices[0].message.content)
+    data["raw_text"] = raw_text
+    return data
